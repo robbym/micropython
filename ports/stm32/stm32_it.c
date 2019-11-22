@@ -77,6 +77,7 @@
 #include "gccollect.h"
 #include "extint.h"
 #include "timer.h"
+#include "trie.h"
 #include "uart.h"
 #include "storage.h"
 #include "dma.h"

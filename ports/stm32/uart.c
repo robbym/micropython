@@ -34,6 +34,7 @@
 #include "py/mphal.h"
 #include "lib/utils/interrupt_char.h"
 #include "lib/utils/mpirq.h"
+#include "trie.h"
 #include "uart.h"
 #include "irq.h"
 #include "pendsv.h"
@@ -825,6 +826,31 @@ void uart_irq_handler(mp_uint_t uart_id) {
                         ((uint16_t *)self->read_buf)[self->read_buf_head] = data;
                     } else {
                         self->read_buf[self->read_buf_head] = data;
+
+                        uint16_t index;
+                        if (self->read_buf_tail < self->read_buf_head)
+                            index = self->read_buf_head - self->read_buf_tail;
+                        else
+                            index = (self->read_buf_len - self->read_buf_tail - 1) + self->read_buf_head;
+
+                        time_info_t info = {
+                            .index = index,
+                            .time = mp_hal_ticks_us()
+                        };
+
+                        bool found = trie_accept(self->search_tree, data, &info);
+                        if (found)
+                        {
+                            if (self->listener != mp_const_none)
+                            {
+                                mp_obj_t tuple[2] = {
+                                    mp_obj_new_int(info.index),
+                                    mp_obj_new_int(info.time),
+                                };
+                                mp_sched_schedule(self->listener, mp_obj_new_tuple(2, tuple));
+                            }
+                            trie_reset(self->search_tree);
+                        }
                     }
                     self->read_buf_head = next_head;
                 }

@@ -65,6 +65,7 @@
 #include "softtimer.h"
 #include "i2c.h"
 #include "spi.h"
+#include "trie.h"
 #include "uart.h"
 #include "timer.h"
 #include "led.h"

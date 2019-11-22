@@ -41,6 +41,7 @@
 #include "rtc.h"
 #include "i2c.h"
 #include "spi.h"
+#include "trie.h"
 #include "uart.h"
 #include "can.h"
 #include "adc.h"

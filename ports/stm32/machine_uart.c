@@ -34,6 +34,7 @@
 #include "py/mphal.h"
 #include "lib/utils/interrupt_char.h"
 #include "lib/utils/mpirq.h"
+#include "trie.h"
 #include "uart.h"
 #include "irq.h"
 #include "pendsv.h"
@@ -316,6 +317,11 @@ STATIC mp_obj_t pyb_uart_init_helper(pyb_uart_obj_t *self, size_t n_args, const 
         uart_set_rxbuf(self, len, buf);
     }
 
+    self->search_tree = trie_new();
+    trie_add(self->search_tree, "\r");
+    trie_add(self->search_tree, "\n");
+    trie_add(self->search_tree, "\r\n");
+
     // compute actual baudrate that was configured
     uint32_t actual_baudrate = uart_get_baudrate(self);
 
@@ -476,6 +482,22 @@ STATIC mp_obj_t pyb_uart_writechar(mp_obj_t self_in, mp_obj_t char_in) {
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_2(pyb_uart_writechar_obj, pyb_uart_writechar);
 
+/// \method listener(handler)
+/// Sets the listener.
+/// Return value: `None`.
+STATIC mp_obj_t pyb_uart_listener(mp_obj_t self_in, mp_obj_t handler) {
+    pyb_uart_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    
+    if (handler != mp_const_none && !mp_obj_is_callable(handler)) {
+        mp_raise_ValueError("handler must be None or callable");
+    }
+
+    self->listener = handler;
+
+    return mp_const_none;
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_2(pyb_uart_listener_obj, pyb_uart_listener);
+
 /// \method readchar()
 /// Receive a single character on the bus.
 /// Return value: The character read, as an integer.  Returns -1 on timeout.
@@ -559,6 +581,8 @@ STATIC const mp_rom_map_elem_t pyb_uart_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_writechar), MP_ROM_PTR(&pyb_uart_writechar_obj) },
     { MP_ROM_QSTR(MP_QSTR_readchar), MP_ROM_PTR(&pyb_uart_readchar_obj) },
     { MP_ROM_QSTR(MP_QSTR_sendbreak), MP_ROM_PTR(&pyb_uart_sendbreak_obj) },
+
+    { MP_ROM_QSTR(MP_QSTR_listener), MP_ROM_PTR(&pyb_uart_listener_obj) },
 
     // class constants
     { MP_ROM_QSTR(MP_QSTR_RTS), MP_ROM_INT(UART_HWCONTROL_RTS) },

@@ -40,6 +40,7 @@
 #include "genhdr/mpversion.h"
 #include "rng.h"
 #include "usb.h"
+#include "trie.h"
 #include "uart.h"
 #include "portmodules.h"
 

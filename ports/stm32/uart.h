@@ -60,6 +60,10 @@ typedef struct _pyb_uart_obj_t {
     volatile uint16_t read_buf_head;    // indexes first empty slot
     uint16_t read_buf_tail;             // indexes first full slot (not full if equals head)
     byte *read_buf;                     // byte or uint16_t, depending on char size
+
+    trie_t* search_tree;
+    mp_obj_t listener;
+
     uint16_t mp_irq_trigger;            // user IRQ trigger mask
     uint16_t mp_irq_flags;              // user IRQ active IRQ flags
     struct _mp_irq_obj_t *mp_irq_obj;   // user IRQ object

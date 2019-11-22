@@ -6,6 +6,7 @@
 #include "py/mphal.h"
 #include "extmod/misc.h"
 #include "usb.h"
+#include "trie.h"
 #include "uart.h"
 
 // this table converts from HAL_StatusTypeDef to POSIX errno
