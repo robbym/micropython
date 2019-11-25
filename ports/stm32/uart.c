@@ -827,14 +827,8 @@ void uart_irq_handler(mp_uint_t uart_id) {
                     } else {
                         self->read_buf[self->read_buf_head] = data;
 
-                        uint16_t index;
-                        if (self->read_buf_tail < self->read_buf_head)
-                            index = self->read_buf_head - self->read_buf_tail;
-                        else
-                            index = (self->read_buf_len - self->read_buf_tail - 1) + self->read_buf_head;
-
                         time_info_t info = {
-                            .index = index,
+                            .length = 0,
                             .time = mp_hal_ticks_us()
                         };
 
@@ -844,7 +838,7 @@ void uart_irq_handler(mp_uint_t uart_id) {
                             if (self->listener != mp_const_none)
                             {
                                 mp_obj_t tuple[2] = {
-                                    mp_obj_new_int(info.index),
+                                    mp_obj_new_int(info.length),
                                     mp_obj_new_int(info.time),
                                 };
                                 mp_sched_schedule(self->listener, mp_obj_new_tuple(2, tuple));

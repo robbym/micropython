@@ -3,7 +3,7 @@
 
 typedef struct time_info
 {
-    size_t index;
+    uint16_t length;
     mp_uint_t time;
 } time_info_t;
 

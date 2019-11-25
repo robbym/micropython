@@ -24,6 +24,7 @@ struct trie
     time_info_t* time_stack;
     size_t stack_size;
     uint16_t index;
+    uint16_t length;
 };
 
 void trie_node_del(trie_node_t* node)
@@ -132,11 +133,13 @@ void trie_reset(trie_t* trie)
 {
     trie->current_node = trie->root_node;
     trie->index = 0;
+    trie->length = 0;
 }
 
 bool trie_accept(trie_t* trie, char value, time_info_t* time)
 {
     trie->time_stack[trie->index] = *time;
+    trie->length++;
 
     for (size_t index = 0; index < trie->current_node->children_len; index++)
     {
@@ -149,7 +152,7 @@ bool trie_accept(trie_t* trie, char value, time_info_t* time)
             if (found)
             {
                 *time = trie->time_stack[trie->index - 1];
-                time->index++;
+                time->length = trie->length;
             }
 
             return found;
@@ -157,13 +160,16 @@ bool trie_accept(trie_t* trie, char value, time_info_t* time)
     }
 
     while (!trie->current_node->end && trie->index > 0)
+    {
         trie->current_node = trie->node_stack[--trie->index];
+        trie->length--;
+    }
 
     bool found = trie->current_node->end;
     if (found)
     {
         *time = trie->time_stack[trie->index - 1];
-        time->index++;
+        time->length = trie->length;
     }
 
     return found;
