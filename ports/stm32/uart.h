@@ -61,7 +61,7 @@ typedef struct _pyb_uart_obj_t {
     uint16_t read_buf_tail;             // indexes first full slot (not full if equals head)
     byte *read_buf;                     // byte or uint16_t, depending on char size
 
-    trie_t* search_tree;
+    trie_t *search_tree;
     mp_obj_t listener;
 
     uint16_t mp_irq_trigger;            // user IRQ trigger mask

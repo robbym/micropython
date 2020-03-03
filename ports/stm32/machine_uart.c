@@ -487,7 +487,7 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_2(pyb_uart_writechar_obj, pyb_uart_writechar);
 /// Return value: `None`.
 STATIC mp_obj_t pyb_uart_listener(mp_obj_t self_in, mp_obj_t handler) {
     pyb_uart_obj_t *self = MP_OBJ_TO_PTR(self_in);
-    
+
     if (handler != mp_const_none && !mp_obj_is_callable(handler)) {
         mp_raise_ValueError("handler must be None or callable");
     }

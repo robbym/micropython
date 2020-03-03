@@ -833,10 +833,8 @@ void uart_irq_handler(mp_uint_t uart_id) {
                         };
 
                         bool found = trie_accept(self->search_tree, data, &info);
-                        if (found)
-                        {
-                            if (self->listener != mp_const_none)
-                            {
+                        if (found) {
+                            if (self->listener != mp_const_none) {
                                 mp_obj_t tuple[2] = {
                                     mp_obj_new_int(info.length),
                                     mp_obj_new_int(info.time),
