@@ -821,6 +821,26 @@ void uart_irq_handler(mp_uint_t uart_id) {
                     // Handle interrupt coming in on a UART REPL
                     pendsv_kbd_intr();
                 } else {
+                    if (self->listener != NULL)
+                    {
+                        self->listener->bytes_read++;
+                        if (data == '\n')
+                        {
+                            listener_terminator_t terminator =
+                            {
+                                .bytes_read = self->listener->bytes_read,
+                                .timestamp = mp_hal_ticks_us(),
+                            };
+                            
+                            uint16_t next_term_head = (self->listener->terminators_head + 1) % INPUT_TERMINATOR_BUFFER;
+                            if (next_term_head != self->listener->terminators_tail)
+                            {
+                                self->listener->terminators[self->listener->terminators_head] = terminator;
+                                self->listener->terminators_head = next_term_head;
+                            }                            
+                        }
+                    }
+
                     if (self->char_width == CHAR_WIDTH_9BIT) {
                         ((uint16_t *)self->read_buf)[self->read_buf_head] = data;
                     } else {

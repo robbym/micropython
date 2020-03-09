@@ -26,6 +26,8 @@
 #ifndef MICROPY_INCLUDED_STM32_UART_H
 #define MICROPY_INCLUDED_STM32_UART_H
 
+#include "machine_listener.h"
+
 struct _mp_irq_obj_t;
 
 typedef enum {
@@ -63,6 +65,8 @@ typedef struct _pyb_uart_obj_t {
     uint16_t mp_irq_trigger;            // user IRQ trigger mask
     uint16_t mp_irq_flags;              // user IRQ active IRQ flags
     struct _mp_irq_obj_t *mp_irq_obj;   // user IRQ object
+
+    listener_obj_t *listener;
 } pyb_uart_obj_t;
 
 extern const mp_obj_type_t pyb_uart_type;

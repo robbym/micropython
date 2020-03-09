@@ -330,6 +330,8 @@ STATIC mp_obj_t pyb_uart_init_helper(pyb_uart_obj_t *self, size_t n_args, const 
         mp_raise_msg_varg(&mp_type_ValueError, "set baudrate %d is not within 5%% of desired value", actual_baudrate);
     }
 
+    self->listener = NULL;
+
     return mp_const_none;
 }
 

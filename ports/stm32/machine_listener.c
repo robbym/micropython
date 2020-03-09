@@ -33,18 +33,11 @@
 #include "py/runtime.h"
 #include "py/stream.h"
 
+#include "rtc.h"
 #include "uart.h"
+#include "strftime.h"
+#include "machine_listener.h"
 
-
-#define OUTPUT_BUFFER_SIZE (2048)
-
-typedef struct _listener_obj_t
-{
-    pyb_uart_obj_t *uart;
-    mp_obj_t file;
-    uint8_t *buffer;
-    size_t out_idx;
-} listener_obj_t;
 
 typedef struct _machine_listener_obj_t
 {
@@ -55,47 +48,127 @@ typedef struct _machine_listener_obj_t
 
 const mp_obj_type_t machine_listener_type;
 
-STATIC void process_channel(listener_obj_t *listener)
+STATIC int buffered_stream_write(buffered_stream_writer_t *buffered_stream, const uint8_t *buf, size_t size, int *errcode)
 {
-    pyb_uart_obj_t *uart = listener->uart;
-    mp_obj_t file = listener->file;
-    uint8_t *buffer = listener->buffer;
-    size_t buffer_size = OUTPUT_BUFFER_SIZE;
-    size_t* out_idx = &listener->out_idx;
-
-    int err;
-    bool receivedBytes = false;
-
-    const mp_stream_p_t *uart_stream = mp_get_stream(uart);
-    const mp_stream_p_t *file_stream = mp_get_stream(file);
-
-    if (uart_rx_any(uart))
+    while (size > 0)
     {
-        receivedBytes = true;
+        size_t bytes_to_copy = OUTPUT_BUFFER_SIZE - buffered_stream->buffer_index;
+        if (size < bytes_to_copy)
+            bytes_to_copy = size;
 
-        mp_uint_t remaining = buffer_size - *out_idx;
+        memcpy(&buffered_stream->buffer[buffered_stream->buffer_index], buf, bytes_to_copy);
 
-        mp_uint_t length = uart_rx_any(uart);
-        if (length > remaining)
-            length = remaining;
+        buffered_stream->buffer_index += bytes_to_copy;
+        buf += bytes_to_copy;
+        size -= bytes_to_copy;
 
-        uart_stream->read(uart, &buffer[*out_idx], length, &err);
-        *out_idx += length;
-
-        if (*out_idx == buffer_size)
+        if (buffered_stream->buffer_index == OUTPUT_BUFFER_SIZE)
         {
-            file_stream->write(file, buffer, *out_idx, &err);
-            file_stream->ioctl(file, MP_STREAM_FLUSH, 0, &err);
-            *out_idx = 0;
+            buffered_stream->stream->write(buffered_stream->file, buffered_stream->buffer, OUTPUT_BUFFER_SIZE, errcode);
+            buffered_stream->stream->ioctl(buffered_stream->file, MP_STREAM_FLUSH, 0, errcode);
+            buffered_stream->buffer_index = 0;
         }
     }
 
-    if (!receivedBytes && *out_idx > 0)
+    return 0;
+}
+
+STATIC void buffered_stream_flush(buffered_stream_writer_t *buffered_stream, int *errcode)
+{
+    if (buffered_stream->buffer_index != 0)
     {
-        file_stream->write(file, buffer, *out_idx, &err);
-        file_stream->ioctl(file, MP_STREAM_FLUSH, 0, &err);
-        *out_idx = 0;
+        buffered_stream->stream->write(buffered_stream->file, buffered_stream->buffer, buffered_stream->buffer_index, errcode);
+        buffered_stream->stream->ioctl(buffered_stream->file, MP_STREAM_FLUSH, 0, errcode);
+        buffered_stream->buffer_index = 0;
     }
+}
+
+static uint8_t rxbuffer[4096];
+
+STATIC void process_channel(listener_obj_t *listener)
+{
+    char time_stamp_buffer[64];
+    const char* time_format = "%Y/%m/%d, %H:%M:%S.%f, ";
+    pyb_uart_obj_t *uart = listener->uart;
+
+    int err;
+
+    const mp_stream_p_t *uart_stream = mp_get_stream(uart);
+
+    listener_terminator_t *terminator = NULL;
+    size_t bytes_to_term = 0;
+    if (listener->terminators_tail != listener->terminators_head)
+    {
+        terminator = &listener->terminators[listener->terminators_tail];
+        bytes_to_term = terminator->bytes_read - listener->bytes_written;
+    }
+
+    if (uart_rx_any(uart))
+    {
+        mp_uint_t bytes_to_write = uart_rx_any(uart);
+        if (bytes_to_write > sizeof(rxbuffer))
+            bytes_to_write = sizeof(rxbuffer);
+
+        uart_stream->read(uart, rxbuffer, bytes_to_write, &err);
+
+        while (bytes_to_write > 0)
+        {
+            if (!listener->line_started)
+            {
+                datetime_t datetime =
+                {
+                    .year = 2020,
+                    .month = 3,
+                    .day = 8
+                };
+
+                listener->line_started = true;
+                size_t written = strftime(time_stamp_buffer, 64, time_format, &datetime);
+                buffered_stream_write(&listener->file_stream, (uint8_t*)time_stamp_buffer, written, &err);
+            }
+
+            if (terminator != NULL && bytes_to_term <= bytes_to_write) {
+                listener->terminators_tail = (listener->terminators_tail + 1) % INPUT_TERMINATOR_BUFFER;
+
+                listener->line_started = false;
+                
+                buffered_stream_write(&listener->file_stream, rxbuffer, bytes_to_term, &err);
+
+                memcpy(rxbuffer, &rxbuffer[bytes_to_term], bytes_to_write - bytes_to_term);
+
+                listener->bytes_written += bytes_to_term;
+                bytes_to_write -= bytes_to_term;
+
+                if (listener->terminators_tail != listener->terminators_head)
+                {
+                    terminator = &listener->terminators[listener->terminators_tail];
+                    bytes_to_term = terminator->bytes_read - listener->bytes_written;
+                }
+                else
+                {
+                    terminator = NULL;
+                }
+            }
+            else
+            {
+                buffered_stream_write(&listener->file_stream, rxbuffer, bytes_to_write, &err);
+                listener->bytes_written += bytes_to_write;
+                bytes_to_write = 0;
+            }
+        }
+
+        listener->last_written = mp_hal_ticks_ms();
+    }
+    else
+    {
+        uint32_t time_since_write = mp_hal_ticks_ms() - listener->last_written;
+        if (time_since_write > 1000)
+        {
+            listener->last_written = mp_hal_ticks_ms();
+            buffered_stream_flush(&listener->file_stream, &err);
+        }
+    }
+    
 }
 
 STATIC void machine_listener_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
@@ -118,10 +191,24 @@ STATIC mp_obj_t machine_listener_add(mp_obj_t self_in, mp_obj_t uart_in, mp_obj_
     self->listener_list[self->listener_list_length] = (listener_obj_t)
     {
         .uart = uart,
-        .file = file_in,
-        .buffer = m_new0(uint8_t, OUTPUT_BUFFER_SIZE),
-        .out_idx = 0,
+        .file_stream = {
+            .stream = mp_get_stream(file_in),
+            .file = file_in,
+            .buffer = m_new0(uint8_t, OUTPUT_BUFFER_SIZE),
+            .buffer_index = 0,
+        },
+        
+        .terminators_head = 0,
+        .terminators_head = 0,
+        .last_bytes_read = 0,
+
+        .line_started = false,
+        .bytes_read = 0,
+        .bytes_written = 0,
+
+        .last_written = 0,
     };
+    uart->listener = &self->listener_list[self->listener_list_length];
     self->listener_list_length++;
 
     return mp_const_none;

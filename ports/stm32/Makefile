@@ -304,6 +304,7 @@ SRC_C = \
 	flashbdev.c \
 	spibdev.c \
 	storage.c \
+	strftime.c \
 	sdcard.c \
 	sdram.c \
 	fatfs_port.c \
