@@ -83,11 +83,11 @@ STATIC void buffered_stream_flush(buffered_stream_writer_t *buffered_stream, int
 }
 
 static char time_stamp_buffer[64];
-datetime_t datetime_zero;
+static const char* time_format = "%Y/%m/%d, %H:%M:%S.%f, ";
+static const char* time_format_term = "%Y/%m/%d, %H:%M:%S.%f, *TERMINATOR*\n";
 
 STATIC void process_channel(listener_obj_t *listener)
 {
-    const char* time_format = "%Y/%m/%d, %H:%M:%S.%f, ";
     pyb_uart_obj_t *uart = listener->uart;
 
     int err;
@@ -96,12 +96,10 @@ STATIC void process_channel(listener_obj_t *listener)
 
     listener_terminator_t *terminator = NULL;
     size_t bytes_to_term = 0;
-    datetime_t *datetime = NULL;
     if (listener->terminators_tail != listener->terminators_head)
     {
         terminator = &listener->terminators[listener->terminators_tail];
         bytes_to_term = terminator->bytes_read - listener->bytes_written;
-        datetime = &terminator->timestamp;
     }
 
     if (uart_rx_any(uart))
@@ -116,12 +114,9 @@ STATIC void process_channel(listener_obj_t *listener)
         {
             if (!listener->line_started)
             {
-                datetime_t *dt = datetime;
-                if (dt == NULL)
-                    dt = &datetime_zero;
-
+                datetime_t timestamp = strftime_rtc_value();
                 listener->line_started = true;
-                size_t written = strftime(time_stamp_buffer, 64, time_format, dt);
+                size_t written = strftime(time_stamp_buffer, 64, time_format, &timestamp);
                 buffered_stream_write(&listener->file_stream, (uint8_t*)time_stamp_buffer, written, &err);
             }
 
@@ -136,6 +131,9 @@ STATIC void process_channel(listener_obj_t *listener)
 
                 listener->bytes_written += bytes_to_term;
                 bytes_to_write -= bytes_to_term;
+
+                size_t written = strftime(time_stamp_buffer, 64, time_format_term, &terminator->timestamp);
+                buffered_stream_write(&listener->file_stream, (uint8_t*)time_stamp_buffer, written, &err);
 
                 if (listener->terminators_tail != listener->terminators_head)
                 {

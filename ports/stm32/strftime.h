@@ -16,5 +16,6 @@ typedef struct _datetime_t
 } datetime_t;
 
 size_t strftime(char* output, size_t output_size, const char* format, const datetime_t* datetime);
+datetime_t strftime_rtc_value(void);
 
 #endif

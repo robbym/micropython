@@ -2,7 +2,10 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "py/runtime.h"
+
 #include "strftime.h"
+#include "rtc.h"
 
 static const char* weekdays[] =
 {
@@ -225,4 +228,27 @@ end_switch_label:
 end_label:
     *output = '\0';
     return output - start;
+}
+
+
+datetime_t strftime_rtc_value(void)
+{
+    RTC_DateTypeDef date;
+    RTC_TimeTypeDef time;
+    HAL_RTC_GetTime(&RTCHandle, &time, RTC_FORMAT_BIN);
+    HAL_RTC_GetDate(&RTCHandle, &date, RTC_FORMAT_BIN);
+    
+    datetime_t timestamp =
+    {
+        .microsecond = 0,
+        .second = time.Seconds,
+        .minute = time.Minutes,
+        .hour = time.Hours,
+        .day = date.Date,
+        .weekday = date.WeekDay,
+        .month = date.Month,
+        .year = 2000 + date.Year,
+    };
+
+    return timestamp;
 }

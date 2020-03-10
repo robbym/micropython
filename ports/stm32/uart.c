@@ -826,25 +826,11 @@ void uart_irq_handler(mp_uint_t uart_id) {
                     {
                         self->listener->bytes_read++;
                         if (data == '\n')
-                        {
-                            RTC_DateTypeDef date;
-                            RTC_TimeTypeDef time;
-                            HAL_RTC_GetTime(&RTCHandle, &time, RTC_FORMAT_BIN);
-                            HAL_RTC_GetDate(&RTCHandle, &date, RTC_FORMAT_BIN);
-                            
+                        {                            
                             listener_terminator_t terminator =
                             {
                                 .bytes_read = self->listener->bytes_read,
-                                .timestamp = {
-                                    .microsecond = 0,
-                                    .second = time.Seconds,
-                                    .minute = time.Minutes,
-                                    .hour = time.Hours,
-                                    .day = date.Date,
-                                    .weekday = date.WeekDay,
-                                    .month = date.Month,
-                                    .year = 2000 + date.Year,
-                                },
+                                .timestamp = strftime_rtc_value(),
                             };
                             
                             uint16_t next_term_head = (self->listener->terminators_head + 1) % INPUT_TERMINATOR_BUFFER;
