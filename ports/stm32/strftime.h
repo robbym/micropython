@@ -1,3 +1,6 @@
+#ifndef MICROPY_INCLUDED_STM32_STRFTIME_H
+#define MICROPY_INCLUDED_STM32_STRFTIME_H
+
 #include <stdint.h>
 
 typedef struct _datetime_t
@@ -13,3 +16,5 @@ typedef struct _datetime_t
 } datetime_t;
 
 size_t strftime(char* output, size_t output_size, const char* format, const datetime_t* datetime);
+
+#endif

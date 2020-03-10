@@ -7,14 +7,15 @@
 #include "py/stream.h"
 
 #include "uart.h"
+#include "strftime.h"
 
 #define OUTPUT_BUFFER_SIZE (4096)
-#define INPUT_TERMINATOR_BUFFER (128)
+#define INPUT_TERMINATOR_BUFFER (64)
 
 typedef struct _listener_terminator_t
 {
     size_t bytes_read;
-    uint32_t timestamp;
+    datetime_t timestamp;
 } listener_terminator_t;
 
 typedef struct _buffered_stream_writer_t
@@ -35,13 +36,21 @@ typedef struct _listener_obj_t
     listener_terminator_t terminators[INPUT_TERMINATOR_BUFFER];
     size_t terminators_head;
     size_t terminators_tail;
-    size_t last_bytes_read;
 
     bool line_started;
     size_t bytes_read;
     size_t bytes_written;
 
     uint32_t last_written;
+
+    uint8_t *data_buffer;
+    size_t data_buffer_len;
 } listener_obj_t;
+
+typedef struct _listener_obj_list_t
+{
+    listener_obj_t listener;
+    struct _listener_obj_list_t *next;
+} listener_obj_list_t;
 
 #endif
