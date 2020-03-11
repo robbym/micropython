@@ -526,6 +526,7 @@ void TAMP_STAMP_IRQHandler(void) {
 }
 
 void RTC_WKUP_IRQHandler(void) {
+    strftime_set_micro(mp_hal_ticks_us());
     IRQ_ENTER(RTC_WKUP_IRQn);
     RTC->ISR &= ~RTC_ISR_WUTF; // clear wakeup interrupt flag
     Handle_EXTI_Irq(EXTI_RTC_WAKEUP); // clear EXTI flag and execute optional callback

@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "py/mphal.h"
 #include "py/runtime.h"
 
 #include "strftime.h"
@@ -230,6 +231,17 @@ end_label:
     return output - start;
 }
 
+static mp_uint_t _microsecond_timestamp = 0;
+
+void strftime_set_micro(mp_uint_t microsecond)
+{
+    _microsecond_timestamp = microsecond;
+}
+
+mp_uint_t strftime_get_micro(void)
+{
+    return mp_hal_ticks_us() - _microsecond_timestamp;
+}
 
 datetime_t strftime_rtc_value(void)
 {
@@ -240,7 +252,7 @@ datetime_t strftime_rtc_value(void)
     
     datetime_t timestamp =
     {
-        .microsecond = 0,
+        .microsecond = strftime_get_micro(),
         .second = time.Seconds,
         .minute = time.Minutes,
         .hour = time.Hours,
