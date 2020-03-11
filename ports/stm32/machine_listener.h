@@ -10,7 +10,7 @@
 #include "strftime.h"
 
 #define OUTPUT_BUFFER_SIZE (4096)
-#define INPUT_TERMINATOR_BUFFER (64)
+#define INPUT_TERMINATOR_BUFFER (1024)
 
 typedef struct _listener_terminator_t
 {
