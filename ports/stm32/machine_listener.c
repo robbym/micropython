@@ -83,8 +83,8 @@ STATIC void buffered_stream_flush(buffered_stream_writer_t *buffered_stream, int
 }
 
 static char time_stamp_buffer[64];
-static const char* time_format = "%Y/%m/%d, %H:%M:%S.%f, ";
-static const char* time_format_term = "%Y/%m/%d, %H:%M:%S.%f, *TERMINATOR*\n";
+static const char* time_format = "%Y/%m/%d\t%H:%M:%S.%f\t";
+static const char* time_format_term = "%Y/%m/%d\t%H:%M:%S.%f\t*TERMINATOR*\n";
 
 STATIC void process_channel(listener_obj_t *listener)
 {
@@ -230,7 +230,6 @@ STATIC mp_obj_t machine_listener_listen(mp_obj_t self_in) {
     return mp_const_none;
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(machine_listener_listen_obj, machine_listener_listen);
-
 
 STATIC const mp_rom_map_elem_t machine_listener_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_add), MP_ROM_PTR(&machine_listener_add_obj) },
