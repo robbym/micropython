@@ -47,29 +47,30 @@ typedef struct _machine_listener_obj_t
 
 const mp_obj_type_t machine_listener_type;
 
-STATIC int buffered_stream_write(buffered_stream_writer_t *buffered_stream, const uint8_t *buf, size_t size, int *errcode)
+STATIC size_t itoa_padded(char *out_buffer, uint32_t value, uint8_t padding, uint8_t radix)
 {
-    while (size > 0)
+    static const char *ALPHABET = "0123456789ABCDEF";
+
+    size_t index = 0;
+    while (value != 0)
     {
-        size_t bytes_to_copy = OUTPUT_BUFFER_SIZE - buffered_stream->buffer_index;
-        if (size < bytes_to_copy)
-            bytes_to_copy = size;
-
-        memcpy(&buffered_stream->buffer[buffered_stream->buffer_index], buf, bytes_to_copy);
-
-        buffered_stream->buffer_index += bytes_to_copy;
-        buf += bytes_to_copy;
-        size -= bytes_to_copy;
-
-        if (buffered_stream->buffer_index == OUTPUT_BUFFER_SIZE)
-        {
-            buffered_stream->stream->write(buffered_stream->file, buffered_stream->buffer, OUTPUT_BUFFER_SIZE, errcode);
-            buffered_stream->stream->ioctl(buffered_stream->file, MP_STREAM_FLUSH, 0, errcode);
-            buffered_stream->buffer_index = 0;
-        }
+        out_buffer[index++] = ALPHABET[(value % radix)];
+        value /= radix;
     }
 
-    return 0;
+    while (index < padding)
+        out_buffer[index++] = 48;
+
+    size_t length = index;
+    while (index > (length / 2))
+    {
+        char temp = out_buffer[index - 1];
+        out_buffer[index - 1] = out_buffer[length - index];
+        out_buffer[length - index] = temp;
+        index--;
+    }
+
+    return length;
 }
 
 STATIC void buffered_stream_flush(buffered_stream_writer_t *buffered_stream, int *errcode)
@@ -82,9 +83,91 @@ STATIC void buffered_stream_flush(buffered_stream_writer_t *buffered_stream, int
     }
 }
 
-static char time_stamp_buffer[64];
+STATIC void buffered_stream_putchar(buffered_stream_writer_t *buffered_stream, char out_char, int *errcode)
+{
+    if (buffered_stream->buffer_index == OUTPUT_BUFFER_SIZE)
+        buffered_stream_flush(buffered_stream, errcode);
+    buffered_stream->buffer[buffered_stream->buffer_index++] = out_char;
+}
+
+STATIC void buffered_stream_write(buffered_stream_writer_t *buffered_stream, const uint8_t *buf, size_t size, int *errcode)
+{
+    while (size > 0)
+    {
+        if (buffered_stream->buffer_index == OUTPUT_BUFFER_SIZE)
+            buffered_stream_flush(buffered_stream, errcode);
+
+        size_t available = OUTPUT_BUFFER_SIZE - buffered_stream->buffer_index;
+        if (size < available)
+            available = size;
+
+        memcpy(&buffered_stream->buffer[buffered_stream->buffer_index], buf, available);
+        buffered_stream->buffer_index += available;
+        buf += available;
+        size -= available;
+    }
+}
+
+STATIC void buffered_stream_escaped_write(buffered_stream_writer_t *buffered_stream, const uint8_t *buf, size_t size, int *errcode)
+{
+    char out_buffer[10] = "";
+
+    for (int index = 0; index < size; index++)
+    {
+        char *out_buffer_ptr = out_buffer;
+        char out_char = (char)buf[index];
+        
+        if (out_char < ' ')
+        {
+            switch (out_char)
+            {
+            case '\t':
+                out_char = 't';
+                goto buffered_stream_escaped;
+            case '\n':
+                out_char = 'n';
+                goto buffered_stream_escaped;
+            case '\r':
+                out_char = 'r';
+                goto buffered_stream_escaped;
+
+buffered_stream_escaped:
+                buffered_stream_putchar(buffered_stream, '\\', errcode);
+                buffered_stream_putchar(buffered_stream, out_char, errcode);
+                break;
+            
+            default:
+                *out_buffer_ptr++ = '<';
+                *out_buffer_ptr++ = '0';
+                *out_buffer_ptr++ = 'x';
+                out_buffer_ptr += itoa_padded(out_buffer_ptr, (uint8_t)out_char, 2, 16);
+                *out_buffer_ptr++ = '>';
+
+                buffered_stream_write(buffered_stream, (uint8_t*)out_buffer, out_buffer_ptr - out_buffer, errcode);
+                break;
+            }
+        }
+        else
+        {
+            buffered_stream_putchar(buffered_stream, out_char, errcode);
+        }
+    }
+}
+
+STATIC void buffered_stream_newline(buffered_stream_writer_t *buffered_stream, int *errcode)
+{
+    if (buffered_stream->buffer_index == OUTPUT_BUFFER_SIZE)
+        buffered_stream_flush(buffered_stream, errcode);
+
+    buffered_stream->buffer[buffered_stream->buffer_index++] = '\n';
+}
+
+#define TIMESTAMP_BUFFER_SIZE (64)
+static char time_stamp_buffer[TIMESTAMP_BUFFER_SIZE];
 static const char* time_format = "%Y/%m/%d\t%H:%M:%S.%f\t";
-static const char* time_format_term = "%Y/%m/%d\t%H:%M:%S.%f\t*TERMINATOR*\n";
+static const char* time_format_term = "%Y/%m/%d\t%H:%M:%S.%f\t*TERM*";
+static const char* time_format_uart_ovfl = "%Y/%m/%d\t%H:%M:%S.%f\t*UART OVERFLOW*";
+static const char* time_format_term_ovfl = "%Y/%m/%d\t%H:%M:%S.%f\t*TERM OVERFLOW*";
 
 STATIC void process_channel(listener_obj_t *listener)
 {
@@ -93,6 +176,39 @@ STATIC void process_channel(listener_obj_t *listener)
     int err;
 
     const mp_stream_p_t *uart_stream = mp_get_stream(uart);
+
+    if (listener->uartOverflowed)
+    {
+        listener->uartOverflowed = false;
+
+        listener->bytes_read = 0;
+        listener->bytes_written = 0;
+        listener->terminators_tail = listener->terminators_head;
+        uart_set_rxbuf(uart, uart->read_buf_len, uart->read_buf);
+
+        datetime_t timestamp = strftime_rtc_value();
+        size_t written = strftime(time_stamp_buffer, TIMESTAMP_BUFFER_SIZE, time_format_uart_ovfl, &timestamp);
+        buffered_stream_newline(&listener->file_stream, &err);
+        buffered_stream_write(&listener->file_stream, (uint8_t*)time_stamp_buffer, written, &err);
+        buffered_stream_newline(&listener->file_stream, &err);
+
+        listener->line_started = false;
+    }
+
+    if (listener->termOverflowed)
+    {
+        listener->termOverflowed = false;
+
+        listener->terminators_tail = listener->terminators_head;
+
+        datetime_t timestamp = strftime_rtc_value();
+        size_t written = strftime(time_stamp_buffer, TIMESTAMP_BUFFER_SIZE, time_format_term_ovfl, &timestamp);
+        buffered_stream_newline(&listener->file_stream, &err);
+        buffered_stream_write(&listener->file_stream, (uint8_t*)time_stamp_buffer, written, &err);
+        buffered_stream_newline(&listener->file_stream, &err);
+
+        listener->line_started = false;
+    }
 
     listener_terminator_t *terminator = NULL;
     size_t bytes_to_term = 0;
@@ -116,7 +232,7 @@ STATIC void process_channel(listener_obj_t *listener)
             {
                 datetime_t timestamp = strftime_rtc_value();
                 listener->line_started = true;
-                size_t written = strftime(time_stamp_buffer, 64, time_format, &timestamp);
+                size_t written = strftime(time_stamp_buffer, TIMESTAMP_BUFFER_SIZE, time_format, &timestamp);
                 buffered_stream_write(&listener->file_stream, (uint8_t*)time_stamp_buffer, written, &err);
             }
 
@@ -125,15 +241,17 @@ STATIC void process_channel(listener_obj_t *listener)
 
                 listener->line_started = false;
                 
-                buffered_stream_write(&listener->file_stream, listener->data_buffer, bytes_to_term, &err);
+                buffered_stream_escaped_write(&listener->file_stream, listener->data_buffer, bytes_to_term, &err);
+                buffered_stream_newline(&listener->file_stream, &err);
 
                 memcpy(listener->data_buffer, &listener->data_buffer[bytes_to_term], bytes_to_write - bytes_to_term);
 
                 listener->bytes_written += bytes_to_term;
                 bytes_to_write -= bytes_to_term;
 
-                size_t written = strftime(time_stamp_buffer, 64, time_format_term, &terminator->timestamp);
+                size_t written = strftime(time_stamp_buffer, TIMESTAMP_BUFFER_SIZE, time_format_term, &terminator->timestamp);
                 buffered_stream_write(&listener->file_stream, (uint8_t*)time_stamp_buffer, written, &err);
+                buffered_stream_newline(&listener->file_stream, &err);
 
                 if (listener->terminators_tail != listener->terminators_head)
                 {
@@ -147,7 +265,7 @@ STATIC void process_channel(listener_obj_t *listener)
             }
             else
             {
-                buffered_stream_write(&listener->file_stream, listener->data_buffer, bytes_to_write, &err);
+                buffered_stream_escaped_write(&listener->file_stream, listener->data_buffer, bytes_to_write, &err);
                 listener->bytes_written += bytes_to_write;
                 bytes_to_write = 0;
             }
@@ -206,6 +324,9 @@ STATIC mp_obj_t machine_listener_add(mp_obj_t self_in, mp_obj_t uart_in, mp_obj_
 
             .data_buffer = m_new0(uint8_t, OUTPUT_BUFFER_SIZE),
             .data_buffer_len = OUTPUT_BUFFER_SIZE,
+
+            .uartOverflowed = false,
+            .termOverflowed = false,
         },
 
         .next = self->listener_list
@@ -220,6 +341,13 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_3(machine_listener_add_obj, machine_listener_add)
 
 STATIC mp_obj_t machine_listener_listen(mp_obj_t self_in) {
     machine_listener_obj_t *self = MP_OBJ_TO_PTR(self_in);
+
+    const mp_obj_t args[] =
+    {
+        mp_const_none,
+        mp_obj_new_int(1000)
+    };
+    pyb_rtc_wakeup(2, args);
 
     for (;;)
     {
@@ -244,3 +372,17 @@ const mp_obj_type_t machine_listener_type = {
     .make_new = machine_listener_make_new,
     .locals_dict = (mp_obj_dict_t *)&machine_listener_locals_dict,
 };
+
+bool machine_listener_is_terminator(listener_obj_t *listener, char term)
+{
+    switch (term)
+    {
+        case '\r':
+        case '\n':
+        case '>':
+            return true;
+
+        default:
+            return false;
+    }
+}

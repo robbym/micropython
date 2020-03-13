@@ -825,7 +825,7 @@ void uart_irq_handler(mp_uint_t uart_id) {
                     if (self->listener != NULL)
                     {
                         self->listener->bytes_read++;
-                        if (data == '\n')
+                        if (machine_listener_is_terminator(self->listener, data))
                         {                            
                             listener_terminator_t terminator =
                             {
@@ -838,7 +838,12 @@ void uart_irq_handler(mp_uint_t uart_id) {
                             {
                                 self->listener->terminators[self->listener->terminators_head] = terminator;
                                 self->listener->terminators_head = next_term_head;
-                            }                            
+                            }
+                            else
+                            {
+                                self->listener->termOverflowed = true;
+                            }
+                            
                         }
                     }
 
@@ -850,7 +855,10 @@ void uart_irq_handler(mp_uint_t uart_id) {
                     self->read_buf_head = next_head;
                 }
             } else { // No room: leave char in buf, disable interrupt
-                UART_RXNE_IT_DIS(self->uartx);
+                if (self->listener != NULL)
+                    self->listener->uartOverflowed = true;
+                else
+                    UART_RXNE_IT_DIS(self->uartx);
             }
         }
     }

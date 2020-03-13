@@ -82,6 +82,7 @@
 #include "dma.h"
 #include "i2c.h"
 #include "usb.h"
+#include "rtc.h"
 
 extern void __fatal_error(const char *);
 #if defined(MICROPY_HW_USB_FS)
@@ -526,7 +527,18 @@ void TAMP_STAMP_IRQHandler(void) {
 }
 
 void RTC_WKUP_IRQHandler(void) {
+    static bool has_synced = false;
+
+    RTC_TimeTypeDef time;
+    HAL_RTC_GetTime(&RTCHandle, &time, RTC_FORMAT_BIN);
+    if (!has_synced && time.SubSeconds != 0)
+    {
+        has_synced = true;
+        time.SubSeconds = 0;
+        HAL_RTC_SetTime(&RTCHandle, &time, RTC_FORMAT_BIN);
+    }
     strftime_set_micro(mp_hal_ticks_us());
+
     IRQ_ENTER(RTC_WKUP_IRQn);
     RTC->ISR &= ~RTC_ISR_WUTF; // clear wakeup interrupt flag
     Handle_EXTI_Irq(EXTI_RTC_WAKEUP); // clear EXTI flag and execute optional callback

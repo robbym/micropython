@@ -240,7 +240,8 @@ void strftime_set_micro(mp_uint_t microsecond)
 
 mp_uint_t strftime_get_micro(void)
 {
-    return mp_hal_ticks_us() - _microsecond_timestamp;
+    mp_uint_t ticks_us = mp_hal_ticks_us() - _microsecond_timestamp;
+    return (ticks_us > 999999) ? 999999 : ticks_us;
 }
 
 datetime_t strftime_rtc_value(void)

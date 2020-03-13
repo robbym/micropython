@@ -45,6 +45,9 @@ typedef struct _listener_obj_t
 
     uint8_t *data_buffer;
     size_t data_buffer_len;
+
+    bool uartOverflowed;
+    bool termOverflowed;
 } listener_obj_t;
 
 typedef struct _listener_obj_list_t
@@ -52,5 +55,7 @@ typedef struct _listener_obj_list_t
     listener_obj_t listener;
     struct _listener_obj_list_t *next;
 } listener_obj_list_t;
+
+bool machine_listener_is_terminator(listener_obj_t *listener, char term);
 
 #endif

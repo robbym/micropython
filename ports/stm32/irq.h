@@ -121,18 +121,18 @@ MP_DECLARE_CONST_FUN_OBJ_0(pyb_irq_stats_obj);
 #if __CORTEX_M == 0
 
 #define IRQ_PRI_SYSTICK         0
-#define IRQ_PRI_UART            1
-#define IRQ_PRI_SDIO            1
-#define IRQ_PRI_DMA             1
-#define IRQ_PRI_FLASH           2
-#define IRQ_PRI_OTG_FS          2
-#define IRQ_PRI_OTG_HS          2
-#define IRQ_PRI_TIM5            2
-#define IRQ_PRI_CAN             2
-#define IRQ_PRI_TIMX            2
-#define IRQ_PRI_EXTINT          2
-#define IRQ_PRI_PENDSV          3
-#define IRQ_PRI_RTC_WKUP        3
+#define IRQ_PRI_RTC_WKUP        1
+#define IRQ_PRI_UART            2
+#define IRQ_PRI_SDIO            2
+#define IRQ_PRI_DMA             2
+#define IRQ_PRI_FLASH           3
+#define IRQ_PRI_OTG_FS          3
+#define IRQ_PRI_OTG_HS          3
+#define IRQ_PRI_TIM5            3
+#define IRQ_PRI_CAN             3
+#define IRQ_PRI_TIMX            3
+#define IRQ_PRI_EXTINT          3
+#define IRQ_PRI_PENDSV          4
 
 #else
 
@@ -140,7 +140,7 @@ MP_DECLARE_CONST_FUN_OBJ_0(pyb_irq_stats_obj);
 
 // The UARTs have no FIFOs, so if they don't get serviced quickly then characters
 // get dropped. The handling for each character only consumes about 0.5 usec
-#define IRQ_PRI_UART            NVIC_EncodePriority(NVIC_PRIORITYGROUP_4, 1, 0)
+#define IRQ_PRI_UART            NVIC_EncodePriority(NVIC_PRIORITYGROUP_4, 2, 0)
 
 // SDIO must be higher priority than DMA for SDIO DMA transfers to work.
 #define IRQ_PRI_SDIO            NVIC_EncodePriority(NVIC_PRIORITYGROUP_4, 4, 0)
@@ -170,7 +170,7 @@ MP_DECLARE_CONST_FUN_OBJ_0(pyb_irq_stats_obj);
 // PENDSV should be at the lowst priority so that other interrupts complete
 // before exception is raised.
 #define IRQ_PRI_PENDSV          NVIC_EncodePriority(NVIC_PRIORITYGROUP_4, 15, 0)
-#define IRQ_PRI_RTC_WKUP        NVIC_EncodePriority(NVIC_PRIORITYGROUP_4, 15, 0)
+#define IRQ_PRI_RTC_WKUP        NVIC_EncodePriority(NVIC_PRIORITYGROUP_4, 1, 0)
 
 #endif
 
